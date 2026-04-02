@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>产业链图谱生成器</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-deep: #0a0e1a;
+            --bg-card: #111827;
+            --bg-card-hover: #1a2332;
+            --border: #1e293b;
+            --border-active: #3b82f6;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #8b5cf6;
+            --accent-orange: #f59e0b;
+            --accent-green: #10b981;
+            --glow-blue: rgba(59, 130, 246, 0.15);
+            --glow-cyan: rgba(6, 182, 212, 0.15);
+        }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background 0.4s, color 0.4s;
+        }
+
+        /* Background atmosphere */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(59,130,246,0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(139,92,246,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(6,182,212,0.04) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+            transition: opacity 0.4s;
+        }
+
+        /* ===== Light Theme ===== */
+        body.light-theme {
+            --bg-deep: #f0f4f8;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f8fafc;
+            --border: #e2e8f0;
+            --border-active: #3b82f6;
+            --text-primary: #1e293b;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --glow-blue: rgba(59, 130, 246, 0.08);
+            --glow-cyan: rgba(6, 182, 212, 0.08);
+        }
+
+        body.light-theme::before { opacity: 0.3; }
+
+        body.light-theme .chain-section {
+            border-color: #e2e8f0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        }
+
+        body.light-theme .chain-section:hover {
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        body.light-theme .chain-section[data-idx="0"] .category-name { background: rgba(59,130,246,0.08); color: #2563eb; }
+        body.light-theme .chain-section[data-idx="1"] .category-name { background: rgba(139,92,246,0.08); color: #7c3aed; }
+        body.light-theme .chain-section[data-idx="2"] .category-name { background: rgba(16,185,129,0.08); color: #059669; }
+
+        body.light-theme .category {
+            border-color: #e2e8f0;
+            background: #fafbfc;
+        }
+
+        body.light-theme .category:hover { border-color: #3b82f6; }
+
+        body.light-theme .item { color: #475569; border-bottom-color: rgba(0,0,0,0.05); }
+        body.light-theme .item-label { color: #1e293b; }
+
+        body.light-theme .highlight-tag {
+            background: rgba(245,158,11,0.1);
+            color: #b45309;
+            border-color: rgba(245,158,11,0.2);
+        }
+
+        body.light-theme .hero-title {
+            background: linear-gradient(135deg, #1e293b, #475569);
+            -webkit-background-clip: text;
+        }
+
+        body.light-theme .chain-title {
+            background: linear-gradient(135deg, #1e293b, #475569);
+            -webkit-background-clip: text;
+        }
+
+        body.light-theme .preset-chip {
+            border-color: #e2e8f0;
+            color: #475569;
+        }
+
+        body.light-theme .preset-chip:hover {
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+
+        body.light-theme .input-area input {
+            background: #ffffff;
+            border-color: #e2e8f0;
+            color: #1e293b;
+        }
+
+        body.light-theme .btn-export {
+            background: #ffffff;
+            border-color: #e2e8f0;
+            color: #475569;
+        }
+
+        body.light-theme .btn-export:hover {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background: rgba(59,130,246,0.06);
+        }
+
+        body.light-theme .arrow-col svg {
+            filter: drop-shadow(0 0 6px rgba(59,130,246,0.2));
+        }
+
+        /* ===== Theme Toggle ===== */
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            width: 52px;
+            height: 28px;
+            border-radius: 14px;
+            border: 1.5px solid var(--border);
+            background: var(--bg-card);
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            padding: 0 4px;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 12px var(--glow-blue);
+        }
+
+        .theme-toggle .knob {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+        }
+
+        body.light-theme .theme-toggle .knob {
+            transform: translateX(22px);
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        }
+
+        .app { position: relative; z-index: 1; }
+
+        /* Header / Input Area */
+        .hero {
+            padding: 60px 20px 40px;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-title {
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #f1f5f9, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+        }
+
+        .hero-sub {
+            font-size: 16px;
+            color: var(--text-muted);
+            font-weight: 300;
+            margin-bottom: 40px;
+        }
+
+        .input-area {
+            max-width: 640px;
+            margin: 0 auto;
+            display: flex;
+            gap: 12px;
+            padding: 0 20px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 16px 24px;
+            border-radius: 14px;
+            border: 1.5px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 17px;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .input-area input::placeholder { color: var(--text-muted); }
+        .input-area input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 4px var(--glow-blue), 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        .btn-generate {
+            padding: 16px 36px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            color: white;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(59,130,246,0.35);
+        }
+
+        .btn-generate:active { transform: translateY(0); }
+
+        .btn-generate:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-generate .spinner {
+            display: none;
+            width: 20px; height: 20px;
+            border: 2.5px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .btn-generate.loading .btn-text { display: none; }
+        .btn-generate.loading .spinner { display: inline-block; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Preset chips */
+        .presets {
+            max-width: 640px;
+            margin: 20px auto 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            padding: 0 20px;
+        }
+
+        .preset-chip {
+            padding: 8px 18px;
+            border-radius: 100px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-family: inherit;
+        }
+
+        .preset-chip:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background: var(--glow-blue);
+        }
+
+        /* Error */
+        .error-msg {
+            max-width: 640px;
+            margin: 16px auto 0;
+            padding: 14px 20px;
+            border-radius: 10px;
+            background: rgba(239,68,68,0.12);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #fca5a5;
+            font-size: 14px;
+            display: none;
+        }
+
+        /* Chain Display */
+        .chain-container {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 20px;
+            display: none;
+        }
+
+        .chain-container.visible { display: block; }
+
+        .chain-title {
+            text-align: center;
+            font-size: 30px;
+            font-weight: 800;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #f1f5f9, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .chain-wrapper {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        .chain-section {
+            flex: 1;
+            background: var(--bg-card);
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: all 0.4s;
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        .chain-section.animate-in {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .chain-section:hover {
+            border-color: rgba(59,130,246,0.3);
+            box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+        }
+
+        /* Section colors */
+        .chain-section[data-idx="0"] .section-header { background: linear-gradient(135deg, #1e40af, #3b82f6); }
+        .chain-section[data-idx="1"] .section-header { background: linear-gradient(135deg, #5b21b6, #8b5cf6); }
+        .chain-section[data-idx="2"] .section-header { background: linear-gradient(135deg, #065f46, #10b981); }
+
+        .section-header {
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .section-header::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; right: -100%; bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+            animation: sheen 4s ease-in-out infinite;
+        }
+
+        @keyframes sheen {
+            0%, 100% { transform: translateX(-100%); }
+            50% { transform: translateX(100%); }
+        }
+
+        .section-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-sub {
+            font-size: 13px;
+            color: rgba(255,255,255,0.75);
+            margin-top: 4px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-body { padding: 20px; }
+
+        .category {
+            margin-bottom: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: all 0.25s;
+        }
+
+        .category:hover {
+            border-color: rgba(59,130,246,0.25);
+            transform: scale(1.01);
+        }
+
+        .category-name {
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .chain-section[data-idx="0"] .category-name { background: rgba(59,130,246,0.1); color: #60a5fa; }
+        .chain-section[data-idx="1"] .category-name { background: rgba(139,92,246,0.1); color: #a78bfa; }
+        .chain-section[data-idx="2"] .category-name { background: rgba(16,185,129,0.1); color: #34d399; }
+
+        .category-items { padding: 14px 16px; }
+
+        .item {
+            padding: 6px 0;
+            font-size: 13.5px;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .item:last-child { border-bottom: none; }
+
+        .item-label {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .highlight-tag {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 4px;
+            font-size: 12.5px;
+            font-weight: 600;
+            background: rgba(245,158,11,0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245,158,11,0.25);
+            margin: 1px 2px;
+        }
+
+        /* Arrow connectors */
+        .arrow-col {
+            flex-shrink: 0;
+            width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-top: 80px;
+        }
+
+        .arrow-col svg {
+            filter: drop-shadow(0 0 8px rgba(59,130,246,0.3));
+            animation: arrowPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes arrowPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        /* Export button */
+        .export-bar {
+            text-align: center;
+            margin-top: 30px;
+            padding-bottom: 40px;
+            display: none;
+        }
+
+        .export-bar.visible { display: block; }
+
+        .btn-export {
+            padding: 12px 28px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.25s;
+            margin: 0 6px;
+        }
+
+        .btn-export:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background: var(--glow-blue);
+        }
+
+        /* Responsive */
+        @media (max-width: 1100px) {
+            .chain-wrapper { flex-direction: column; }
+            .arrow-col {
+                width: auto;
+                padding: 0;
+                height: 40px;
+                transform: rotate(90deg);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .hero-title { font-size: 28px; }
+            .input-area { flex-direction: column; }
+            .chain-title { font-size: 22px; }
+            .theme-toggle { top: 12px; right: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="切换深色/浅色">
+            <div class="knob">🌙</div>
+        </div>
+        <div class="hero">
+            <h1 class="hero-title">产业链图谱生成器</h1>
+            <p class="hero-sub">输入产业名称，AI 自动生成完整的产业链图谱</p>
+            <div class="input-area">
+                <input type="text" id="industryInput" placeholder="输入产业名称，如：新能源汽车、低空经济、半导体..." />
+                <button class="btn-generate" id="generateBtn" onclick="generate()">
+                    <span class="btn-text">生成图谱</span>
+                    <span class="spinner"></span>
+                </button>
+            </div>
+            <div class="presets">
+                <button class="preset-chip" onclick="quickFill('低空经济')">低空经济</button>
+                <button class="preset-chip" onclick="quickFill('新能源汽车')">新能源汽车</button>
+                <button class="preset-chip" onclick="quickFill('半导体')">半导体</button>
+                <button class="preset-chip" onclick="quickFill('人工智能')">人工智能</button>
+                <button class="preset-chip" onclick="quickFill('光伏')">光伏</button>
+                <button class="preset-chip" onclick="quickFill('生物医药')">生物医药</button>
+                <button class="preset-chip" onclick="quickFill('储能')">储能</button>
+                <button class="preset-chip" onclick="quickFill('机器人')">机器人</button>
+            </div>
+            <div class="error-msg" id="errorMsg"></div>
+        </div>
+
+        <div class="chain-container" id="chainContainer">
+            <h2 class="chain-title" id="chainTitle"></h2>
+            <div class="chain-wrapper" id="chainWrapper">
+                <!-- Sections rendered by JS -->
+            </div>
+        </div>
+
+        <div class="export-bar" id="exportBar">
+            <button class="btn-export" onclick="exportHTML()">📥 导出 HTML</button>
+            <button class="btn-export" onclick="exportJSON()">📋 复制 JSON</button>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+
+        function quickFill(name) {
+            document.getElementById('industryInput').value = name;
+            generate();
+        }
+
+        async function generate() {
+            const input = document.getElementById('industryInput');
+            const btn = document.getElementById('generateBtn');
+            const errDiv = document.getElementById('errorMsg');
+            const industry = input.value.trim();
+
+            if (!industry) { input.focus(); return; }
+
+            btn.classList.add('loading');
+            btn.disabled = true;
+            errDiv.style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ industry }),
+                    signal: AbortSignal.timeout(120000) // 120秒超时
+                });
+
+                const result = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error(result.error || '生成失败');
+                }
+
+                currentData = result.data;
+                renderChain(result.data);
+            } catch (e) {
+                errDiv.textContent = e.message;
+                errDiv.style.display = 'block';
+            } finally {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        }
+
+        function renderChain(data) {
+            const container = document.getElementById('chainContainer');
+            const wrapper = document.getElementById('chainWrapper');
+            const title = document.getElementById('chainTitle');
+            const exportBar = document.getElementById('exportBar');
+
+            title.textContent = data.title || '产业链图谱';
+
+            const arrowSvg = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`;
+
+            let html = '';
+            data.sections.forEach((section, idx) => {
+                let categoriesHtml = '';
+                section.categories.forEach(cat => {
+                    let itemsHtml = '';
+                    cat.items.forEach(item => {
+                        const labelHtml = item.label ? `<span class="item-label">${item.label}：</span>` : '';
+                        const textHtml = item.highlight
+                            ? item.text.replace(/([^\s,，、]+)/g, (m) => {
+                                // highlight the whole text if flagged
+                                return `<span class="highlight-tag">${m}</span>`;
+                              })
+                            : item.text;
+                        itemsHtml += `<div class="item">${labelHtml}${item.highlight ? `<span class="highlight-tag">${item.text}</span>` : item.text}</div>`;
+                    });
+                    categoriesHtml += `
+                        <div class="category">
+                            <div class="category-name">${cat.name}</div>
+                            <div class="category-items">${itemsHtml}</div>
+                        </div>`;
+                });
+
+                html += `
+                    <div class="chain-section" data-idx="${idx}">
+                        <div class="section-header">
+                            <div class="section-name">${section.name}</div>
+                            <div class="section-sub">${section.subtitle || ''}</div>
+                        </div>
+                        <div class="section-body">${categoriesHtml}</div>
+                    </div>`;
+
+                // Add arrow between sections
+                if (idx < data.sections.length - 1) {
+                    html += `<div class="arrow-col">${arrowSvg}</div>`;
+                }
+            });
+
+            wrapper.innerHTML = html;
+            container.classList.add('visible');
+            exportBar.classList.add('visible');
+
+            // Staggered animation
+            document.querySelectorAll('.chain-section').forEach((el, i) => {
+                setTimeout(() => el.classList.add('animate-in'), 150 * i);
+            });
+        }
+
+        function exportHTML() {
+            if (!currentData) return;
+            // Generate standalone HTML like the original template
+            const html = generateStandaloneHTML(currentData);
+            const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = (currentData.title || '产业链图谱') + '.html';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function generateStandaloneHTML(data) {
+            // Produce a clean standalone HTML similar to the original template
+            let sectionsHtml = '';
+            data.sections.forEach((section, idx) => {
+                let catsHtml = '';
+                section.categories.forEach(cat => {
+                    let itemsHtml = '';
+                    cat.items.forEach(item => {
+                        const label = item.label ? `<strong>${item.label}：</strong>` : '';
+                        const text = item.highlight ? `<span class="highlight">${item.text}</span>` : item.text;
+                        itemsHtml += `<div class="item">${label}${text}</div>`;
+                    });
+                    catsHtml += `
+                        <div class="category">
+                            <div class="category-header">${cat.name}</div>
+                            <div class="category-content">${itemsHtml}</div>
+                        </div>`;
+                });
+                const arrow = idx < data.sections.length - 1 ? '<div class="arrow-connector"></div>' : '';
+                sectionsHtml += `
+                    <div class="chain-section">
+                        <div class="section-header">
+                            <div class="section-title">${section.name}</div>
+                            <div class="section-subtitle">${section.subtitle || ''}</div>
+                        </div>
+                        ${catsHtml}
+                        ${arrow}
+                    </div>`;
+            });
+
+            return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${data.title}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; background: linear-gradient(135deg,#f5f7fa,#e4edf5); min-height: 100vh; padding: 40px 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .title { text-align: center; font-size: 32px; font-weight: 700; color: #1a3a5c; margin-bottom: 50px; position: relative; padding-bottom: 20px; }
+        .title::after { content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:120px; height:4px; background:linear-gradient(90deg,#4a90e2,#7bb3f0); border-radius:2px; }
+        .chain-wrapper { display:flex; gap:30px; }
+        .chain-section { flex:1; background:white; border-radius:16px; padding:25px; box-shadow:0 10px 40px rgba(0,0,0,.08); transition:transform .3s,box-shadow .3s; position:relative; }
+        .chain-section:hover { transform:translateY(-5px); box-shadow:0 15px 50px rgba(0,0,0,.12); }
+        .section-header { background:linear-gradient(135deg,#4a90e2,#357abd); color:white; padding:15px 20px; border-radius:10px; text-align:center; margin-bottom:25px; }
+        .section-title { font-size:20px; font-weight:600; }
+        .section-subtitle { font-size:13px; opacity:.9; margin-top:5px; }
+        .category { margin-bottom:20px; border:1px solid #e8f0f8; border-radius:12px; overflow:hidden; }
+        .category:hover { border-color:#4a90e2; }
+        .category-header { background:linear-gradient(135deg,#e8f5e9,#c8e6c9); padding:10px 15px; font-weight:600; color:#2e7d32; font-size:15px; text-align:center; }
+        .category-content { padding:15px; background:#fafbfc; }
+        .item { margin-bottom:12px; line-height:1.6; color:#333; font-size:14px; }
+        .item strong { color:#1a3a5c; }
+        .highlight { background:linear-gradient(120deg,#ffe0b2,#ffcc80); padding:2px 8px; border-radius:4px; font-weight:600; color:#e65100; }
+        .arrow-connector { position:absolute; top:50%; right:-25px; transform:translateY(-50%); z-index:10; }
+        .arrow-connector::before { content:''; width:0; height:0; border-top:15px solid transparent; border-bottom:15px solid transparent; border-left:20px solid #4a90e2; }
+        @media(max-width:1200px){.chain-wrapper{flex-direction:column}.arrow-connector{display:none}}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">${data.title}</h1>
+        <div class="chain-wrapper">${sectionsHtml}</div>
+    </div>
+</body>
+</html>`;
+        }
+
+        function exportJSON() {
+            if (!currentData) return;
+            const text = JSON.stringify(currentData, null, 2);
+            navigator.clipboard.writeText(text).then(() => {
+                alert('JSON 已复制到剪贴板');
+            });
+        }
+
+        // Enter key support
+        document.getElementById('industryInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') generate();
+        });
+
+        // Theme toggle
+        function toggleTheme() {
+            const body = document.body;
+            const knob = document.querySelector('.theme-toggle .knob');
+            body.classList.toggle('light-theme');
+            const isLight = body.classList.contains('light-theme');
+            knob.textContent = isLight ? '☀️' : '🌙';
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        }
+
+        // Restore saved theme
+        (function() {
+            const saved = localStorage.getItem('theme');
+            if (saved === 'light') {
+                document.body.classList.add('light-theme');
+                document.querySelector('.theme-toggle .knob').textContent = '☀️';
+            }
+        })();
+    </script>
+</body>
+</html>
